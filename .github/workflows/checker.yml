@@ -3,6 +3,9 @@ name: Affiliate Checker
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: "0 0 * * *"
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -16,4 +19,9 @@ jobs:
 
       - run: npm install
 
+      - run: npx playwright install chromium
+
       - run: node checker.js
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
