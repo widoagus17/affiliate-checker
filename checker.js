@@ -14,8 +14,15 @@ async function main() {
   });
 
   const doc = new GoogleSpreadsheet(process.env.SHEET_ID, auth);
+  console.log(credentials.client_email);
 
   await doc.loadInfo();
+
+  console.log("Spreadsheet:", doc.title);
+  console.log("Sheets:");
+  doc.sheetsByIndex.forEach((sheet) => {
+    console.log(sheet.title);
+  });
 
   const sheet = doc.sheetsByTitle["Produk"];
 
