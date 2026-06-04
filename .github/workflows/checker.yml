@@ -2,9 +2,12 @@ name: Affiliate Checker
 
 on:
   workflow_dispatch:
-
   schedule:
     - cron: "0 0 * * *"
+
+# Menambahkan opsi global agar semua runner menggunakan Node.js 24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run:
@@ -15,7 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24 # Sekalian naikkan versi runtime Node.js project Anda ke versi 24 terbaru
 
       - run: npm install
 
