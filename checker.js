@@ -191,10 +191,30 @@ async function main() {
                 finalUrl || ''
             );
 
-            row.set(
-                'status',
-                'AKTIF'
-            );
+            let status = 'AKTIF';
+
+            if (
+                finalUrl.includes('/verify/traffic/error')
+            ) {
+                status = 'DIBLOKIR';
+            }
+            else if (
+                finalUrl.includes('/error_page')
+            ) {
+                status = 'MATI';
+            }
+            else if (
+                finalUrl.includes('404')
+            ) {
+                status = 'MATI';
+            }
+            else if (
+                title.toLowerCase().includes('error')
+            ) {
+                status = 'MATI';
+            }
+            
+            row.set('status', status);
 
             row.set(
                 'last_check',
