@@ -10,6 +10,11 @@ async function main() {
         process.env.GOOGLE_CREDENTIALS
     );
 
+    console.log(
+        'Service Account:',
+        credentials.client_email
+    );
+
     const auth = new JWT({
         email: credentials.client_email,
         key: credentials.private_key,
@@ -25,7 +30,10 @@ async function main() {
 
     await doc.loadInfo();
 
-    console.log('Spreadsheet:', doc.title);
+    console.log(
+        'Spreadsheet:',
+        doc.title
+    );
 
     console.log('Daftar Sheet:');
 
@@ -33,12 +41,13 @@ async function main() {
         console.log('- ' + sheet.title);
     });
 
-    // Menggunakan sheet pertama
     const sheet = doc.sheetsByIndex[0];
 
     const rows = await sheet.getRows();
 
-    console.log(`Ditemukan ${rows.length} produk`);
+    console.log(
+        `Ditemukan ${rows.length} produk`
+    );
 
     if (rows.length === 0) {
         console.log('Tidak ada data');
@@ -53,7 +62,9 @@ async function main() {
         viewport: {
             width: 1366,
             height: 768
-        }
+        },
+        userAgent:
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
     });
 
     let successCount = 0;
@@ -70,13 +81,12 @@ async function main() {
 
         console.log(rowData);
 
-        // Mendukung beberapa nama kolom
         const affiliateUrl =
-            row.affiliate_url ||
-            row.link ||
-            row.url ||
-            row.affiliate ||
-            row.affiliateLink ||
+            rowData.affiliate_url ||
+            rowData.link ||
+            rowData.url ||
+            rowData.affiliate ||
+            rowData.affiliateLink ||
             '';
 
         if (!affiliateUrl) {
@@ -85,7 +95,15 @@ async function main() {
                 'Link affiliate kosong'
             );
 
-            row.status = 'LINK KOSONG';
+            row.set(
+                'status',
+                'LINK KOSONG'
+            );
+
+            row.set(
+                'last_check',
+                new Date().toISOString()
+            );
 
             await row.save();
 
@@ -109,8 +127,7 @@ async function main() {
 
             await page.waitForTimeout(5000);
 
-            const finalUrl =
-                page.url();
+            const finalUrl = page.url();
 
             const title =
                 await page.title();
@@ -124,9 +141,10 @@ async function main() {
                         'meta[property="og:image"]'
                     );
 
-                if (
-                    await metaImage.count() > 0
-                ) {
+                const count =
+                    await metaImage.count();
+
+                if (count > 0) {
 
                     thumbnail =
                         await metaImage
@@ -153,28 +171,35 @@ async function main() {
                 finalUrl
             );
 
-            // Simpan ke spreadsheet
-            if ('nama_produk' in rowData) {
-                row.nama_produk = title;
-            }
+            console.log(
+                'THUMBNAIL:',
+                thumbnail
+            );
 
-            if ('thumbnail' in rowData) {
-                row.thumbnail = thumbnail;
-            }
+            row.set(
+                'nama_produk',
+                title || ''
+            );
 
-            if ('final_url' in rowData) {
-                row.final_url = finalUrl;
-            }
+            row.set(
+                'thumbnail',
+                thumbnail || ''
+            );
 
-            if ('status' in rowData) {
-                row.status = 'AKTIF';
-            }
+            row.set(
+                'final_url',
+                finalUrl || ''
+            );
 
-            if ('last_check' in rowData) {
-                row.last_check =
-                    new Date()
-                    .toISOString();
-            }
+            row.set(
+                'status',
+                'AKTIF'
+            );
+
+            row.set(
+                'last_check',
+                new Date().toISOString()
+            );
 
             await row.save();
 
@@ -193,22 +218,22 @@ async function main() {
 
             try {
 
-                if ('status' in rowData) {
-                    row.status = 'ERROR';
-                }
+                row.set(
+                    'status',
+                    'ERROR'
+                );
 
-                if ('last_check' in rowData) {
-                    row.last_check =
-                        new Date()
-                        .toISOString();
-                }
+                row.set(
+                    'last_check',
+                    new Date().toISOString()
+                );
 
                 await row.save();
 
             } catch (saveError) {
 
                 console.log(
-                    'Gagal update status error'
+                    'Gagal menyimpan status error'
                 );
             }
 
