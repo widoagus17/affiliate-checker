@@ -1,104 +1,239 @@
-const { GoogleSpreadsheet } = require("google-spreadsheet");
-const { JWT } = require("google-auth-library");
-const { chromium } = require("playwright");
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { JWT } = require('google-auth-library');
+const { chromium } = require('playwright');
 
 async function main() {
-  console.log("Starting Affiliate Checker...");
 
-  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+    console.log('Starting Affiliate Checker...');
 
-  const auth = new JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+    const credentials = JSON.parse(
+        process.env.GOOGLE_CREDENTIALS
+    );
 
-  const doc = new GoogleSpreadsheet(process.env.SHEET_ID, auth);
-  console.log(credentials.client_email);
+    const auth = new JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: [
+            'https://www.googleapis.com/auth/spreadsheets'
+        ]
+    });
 
-  await doc.loadInfo();
+    const doc = new GoogleSpreadsheet(
+        process.env.SHEET_ID,
+        auth
+    );
 
-  console.log("Spreadsheet:", doc.title);
-  console.log("Sheets:");
-  doc.sheetsByIndex.forEach((sheet) => {
-    console.log(sheet.title);
-  });
+    await doc.loadInfo();
 
-  const sheet = doc.sheetsByTitle["Produk"];
+    console.log('Spreadsheet:', doc.title);
 
-  if (!sheet) {
-    throw new Error('Sheet "Produk" tidak ditemukan');
-  }
+    console.log('Daftar Sheet:');
 
-  const rows = await sheet.getRows();
+    doc.sheetsByIndex.forEach(sheet => {
+        console.log('- ' + sheet.title);
+    });
 
-  console.log(`Ditemukan ${rows.length} produk`);
+    // Menggunakan sheet pertama
+    const sheet = doc.sheetsByIndex[0];
 
-  const browser = await chromium.launch({
-    headless: true,
-  });
+    const rows = await sheet.getRows();
 
-  const page = await browser.newPage({
-    viewport: {
-      width: 1280,
-      height: 800,
-    },
-  });
+    console.log(`Ditemukan ${rows.length} produk`);
 
-  for (const row of rows) {
-    const affiliateUrl = row.affiliate_url?.trim();
-
-    if (!affiliateUrl) {
-      continue;
+    if (rows.length === 0) {
+        console.log('Tidak ada data');
+        return;
     }
 
-    console.log(`Checking: ${row.kode}`);
+    const browser = await chromium.launch({
+        headless: true
+    });
 
-    try {
-      await page.goto(affiliateUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: 60000,
-      });
+    const page = await browser.newPage({
+        viewport: {
+            width: 1366,
+            height: 768
+        }
+    });
 
-      await page.waitForTimeout(5000);
+    let successCount = 0;
+    let errorCount = 0;
 
-      const finalUrl = page.url();
+    for (let i = 0; i < rows.length; i++) {
 
-      const title = await page.title();
+        const row = rows[i];
 
-      let thumbnail = "";
+        console.log('\n================================');
+        console.log(`BARIS ${i + 1}`);
 
-      try {
-        thumbnail = await page
-          .locator('meta[property="og:image"]')
-          .getAttribute("content");
-      } catch (e) {}
+        const rowData = row.toObject();
 
-      row.nama_produk = title || "";
-      row.thumbnail = thumbnail || "";
-      row.final_url = finalUrl;
+        console.log(rowData);
 
-      if (title && !title.toLowerCase().includes("error")) {
-        row.status = "AKTIF";
-      } else {
-        row.status = "PERIKSA";
-      }
-    } catch (error) {
-      row.status = "ERROR";
+        // Mendukung beberapa nama kolom
+        const affiliateUrl =
+            row.affiliate_url ||
+            row.link ||
+            row.url ||
+            row.affiliate ||
+            row.affiliateLink ||
+            '';
 
-      console.log(error.message);
+        if (!affiliateUrl) {
+
+            console.log(
+                'Link affiliate kosong'
+            );
+
+            row.status = 'LINK KOSONG';
+
+            await row.save();
+
+            continue;
+        }
+
+        console.log(
+            'URL:',
+            affiliateUrl
+        );
+
+        try {
+
+            await page.goto(
+                affiliateUrl,
+                {
+                    waitUntil: 'domcontentloaded',
+                    timeout: 60000
+                }
+            );
+
+            await page.waitForTimeout(5000);
+
+            const finalUrl =
+                page.url();
+
+            const title =
+                await page.title();
+
+            let thumbnail = '';
+
+            try {
+
+                const metaImage =
+                    page.locator(
+                        'meta[property="og:image"]'
+                    );
+
+                if (
+                    await metaImage.count() > 0
+                ) {
+
+                    thumbnail =
+                        await metaImage
+                        .first()
+                        .getAttribute(
+                            'content'
+                        );
+                }
+
+            } catch (e) {
+
+                console.log(
+                    'Thumbnail tidak ditemukan'
+                );
+            }
+
+            console.log(
+                'TITLE:',
+                title
+            );
+
+            console.log(
+                'FINAL URL:',
+                finalUrl
+            );
+
+            // Simpan ke spreadsheet
+            if ('nama_produk' in rowData) {
+                row.nama_produk = title;
+            }
+
+            if ('thumbnail' in rowData) {
+                row.thumbnail = thumbnail;
+            }
+
+            if ('final_url' in rowData) {
+                row.final_url = finalUrl;
+            }
+
+            if ('status' in rowData) {
+                row.status = 'AKTIF';
+            }
+
+            if ('last_check' in rowData) {
+                row.last_check =
+                    new Date()
+                    .toISOString();
+            }
+
+            await row.save();
+
+            successCount++;
+
+            console.log(
+                'Data berhasil disimpan'
+            );
+
+        } catch (error) {
+
+            console.log(
+                'ERROR:',
+                error.message
+            );
+
+            try {
+
+                if ('status' in rowData) {
+                    row.status = 'ERROR';
+                }
+
+                if ('last_check' in rowData) {
+                    row.last_check =
+                        new Date()
+                        .toISOString();
+                }
+
+                await row.save();
+
+            } catch (saveError) {
+
+                console.log(
+                    'Gagal update status error'
+                );
+            }
+
+            errorCount++;
+        }
     }
 
-    row.last_check = new Date().toISOString();
+    await browser.close();
 
-    await row.save();
-
-    console.log(`${row.kode} updated`);
-  }
-
-  await browser.close();
-
-  console.log("Affiliate Checker selesai");
+    console.log('\n================================');
+    console.log('SELESAI');
+    console.log(
+        `Berhasil : ${successCount}`
+    );
+    console.log(
+        `Gagal    : ${errorCount}`
+    );
+    console.log('================================');
 }
 
-main().catch(console.error);
+main().catch(error => {
+
+    console.error(
+        'FATAL ERROR:'
+    );
+
+    console.error(error);
+});
